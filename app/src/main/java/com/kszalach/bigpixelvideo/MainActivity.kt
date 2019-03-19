@@ -1,4 +1,4 @@
-package com.kszalach.myapplication
+package com.kszalach.bigpixelvideo
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -14,10 +14,8 @@ import android.util.Log
 import android.view.View
 import android.widget.TimePicker
 import android.widget.VideoView
-import com.crashlytics.android.Crashlytics
 import com.instacart.library.truetime.InvalidNtpServerResponseException
 import com.instacart.library.truetime.TrueTime
-import io.fabric.sdk.android.Fabric
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
@@ -58,7 +56,6 @@ class MainActivity : AppCompatActivity(), MediaPlayer.OnErrorListener {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = flags
         setContentView(R.layout.activity_main)
-        Fabric.with(this, Crashlytics())
         videoView = findViewById(R.id.video_view)
         videoView.setOnInfoListener { mp, what, extra ->
             if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {

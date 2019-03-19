@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "819523002081",
+    "firebase_url": "https://bigpixelvideo.firebaseio.com",
+    "project_id": "bigpixelvideo",
+    "storage_bucket": "bigpixelvideo.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819523002081:android:52557e4f3eac0a27",
+        "android_client_info": {
+          "package_name": "com.kszalach.bigpixelvideo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "819523002081-fv4bj2s9q2cl0sv6mbilnpvcd8cehehd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmKBpPLvqtTptK2ecOclFUF0PHm-2jPaE"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
