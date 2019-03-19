@@ -14,6 +14,7 @@ import android.util.Log
 import android.view.View
 import android.widget.TimePicker
 import android.widget.VideoView
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.instacart.library.truetime.InvalidNtpServerResponseException
 import com.instacart.library.truetime.TrueTime
 import kotlinx.coroutines.GlobalScope
@@ -23,8 +24,6 @@ import java.net.SocketTimeoutException
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
-
-
 
 internal data class ScheduledVideo(val time: Long, val video: String)
 class MainActivity : AppCompatActivity(), MediaPlayer.OnErrorListener {
@@ -51,10 +50,12 @@ class MainActivity : AppCompatActivity(), MediaPlayer.OnErrorListener {
     private lateinit var timePicker: TimePicker
     private var meanDiff = 0L
     private var samplesCount = 0
+    private lateinit var firebaseAnalytics: FirebaseAnalytics
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = flags
+        firebaseAnalytics = FirebaseAnalytics.getInstance(this)
         setContentView(R.layout.activity_main)
         videoView = findViewById(R.id.video_view)
         videoView.setOnInfoListener { mp, what, extra ->
@@ -68,15 +69,17 @@ class MainActivity : AppCompatActivity(), MediaPlayer.OnErrorListener {
                         val expectedPosition = TrueTime.now().time - schedule[currentVideo].time
                         val currentPosition = videoView.currentPosition
                         val diff = expectedPosition - currentPosition
-                        samplesCount++
-                        if (meanDiff == 0L) {
-                            meanDiff = diff
-                        } else {
-                            meanDiff += diff
+                        if (Math.abs(diff) > 250) {
+                            samplesCount++
+                            if (meanDiff == 0L) {
+                                meanDiff = diff
+                            } else {
+                                meanDiff += diff
+                            }
+                            val realDiff = meanDiff / samplesCount
+                            videoView.seekTo(expectedPosition.toInt() + realDiff.toInt())
+                            Log.i("BigPlayer", String.format(Locale.ENGLISH, "Video on position %d, should be %d, diff is %d", currentPosition, expectedPosition, diff))
                         }
-                        val realDiff = meanDiff / samplesCount
-                        videoView.seekTo(expectedPosition.toInt() + realDiff.toInt())
-                        Log.i("BigPlayer", String.format(Locale.ENGLISH, "Video on position %d, should be %d, diff is %d", currentPosition, expectedPosition, diff))
                     }
                 }
 
