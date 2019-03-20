@@ -3,11 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:keepScreenOn="true"
     tools:context=".MainActivity">
 
-    <VideoView
+    <com.google.android.exoplayer2.ui.PlayerView
         android:id="@+id/video_view"
+        app:use_controller="true"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_alignParentBottom="true"
@@ -15,20 +17,60 @@
         android:layout_alignParentRight="true"
         android:layout_alignParentTop="true" />
 
+    <TextView
+        android:id="@+id/elapsedtime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="6dp" />
+
+    <TextView
+        android:id="@+id/diff"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/elapsedtime"
+        android:layout_margin="6dp" />
+
     <TimePicker
         android:id="@+id/time_picker"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:visibility="gone" />
+        android:visibility="invisible" />
+
+    <android.support.v7.widget.SwitchCompat
+        android:id="@+id/syncSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/submit"
+        android:layout_centerHorizontal="true"
+        android:text="Synchronizacja"
+        android:textOff="Na starcie"
+        android:textOn="Co 5s"
+        android:visibility="invisible" />
 
     <android.support.v7.widget.AppCompatButton
         android:id="@+id/submit"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_above="@id/systemtime"
+        android:layout_centerHorizontal="true"
+        android:layout_margin="6dp"
+        android:text="Start!"
+        android:visibility="invisible" />
+
+    <TextView
+        android:id="@+id/systemtime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/truetime"
+        android:layout_centerHorizontal="true"
+        android:layout_margin="6dp" />
+
+    <TextView
+        android:id="@+id/truetime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
-        android:layout_margin="24dp"
-        android:text="Start!"
-        android:visibility="gone" />
+        android:layout_margin="6dp" />
 </RelativeLayout>
