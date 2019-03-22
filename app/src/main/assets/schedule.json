@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "position": 0,
+      "startHour": 18,
+      "startMinute": 11,
+      "video": "1.mp4",
+      "length": 60
+    },
+    {
+      "position": 1,
+      "startHour": 18,
+      "startMinute": 12,
+      "video": "1.mp4",
+      "length": 60
+    },
+    {
+      "position": 2,
+      "startHour": 18,
+      "startMinute": 13,
+      "video": "1.mp4",
+      "length": 60
+    }
+  ]
+}

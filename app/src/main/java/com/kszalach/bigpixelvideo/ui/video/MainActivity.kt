@@ -1,14 +1,10 @@
-package com.kszalach.bigpixelvideo
+package com.kszalach.bigpixelvideo.ui.video
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
-import android.support.v4.app.ActivityCompat
-import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.SwitchCompat
 import android.view.View
@@ -26,6 +22,7 @@ import com.google.android.exoplayer2.video.VideoListener
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.instacart.library.truetime.InvalidNtpServerResponseException
 import com.instacart.library.truetime.TrueTime
+import com.kszalach.bigpixelvideo.R
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
@@ -129,20 +126,7 @@ class MainActivity : AppCompatActivity(), Player.EventListener, VideoListener {
                 }
             }
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), 1)
-        } else {
-            syncTime()
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-            syncTime()
-        } else {
-            finish()
-        }
+        syncTime()
     }
 
     override fun onPause() {

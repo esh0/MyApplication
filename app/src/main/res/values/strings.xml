@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">BigPixelVideo</string>
+    <string name="server_url">Adres serwera</string>
+    <string name="device_id">Pozycja urządzenia</string>
+    <string name="start">Start</string>
+    <string name="field_missing">Pole wymagane</string>
+    <string name="wrong_schedule_error">Niewłaściwy plik harmonogramu</string>
+    <string name="not_all_downloaded_error">Nie pobrano wszystkich plików</string>
+    <string name="no_videos_error">Brak zdefiniowanych nazw plików</string>
 </resources>
