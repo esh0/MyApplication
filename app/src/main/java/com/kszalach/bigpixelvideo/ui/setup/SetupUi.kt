@@ -10,4 +10,8 @@ interface SetupUi : BaseUi {
     fun showWrongScheduleError()
     fun showNotAllDownloadedError()
     fun showShowNoVideosError()
+    fun enableInputs(enabled: Boolean)
+    fun showNotSyncedError()
+    fun showNoPermissionsError()
+    fun showNoNetworkError()
 }

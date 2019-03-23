@@ -2,6 +2,7 @@ package com.kszalach.bigpixelvideo.ui.setup
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.NetworkInfo
 import android.os.Environment
 import com.google.gson.Gson
 import com.instacart.library.truetime.InvalidNtpServerResponseException
@@ -24,8 +25,13 @@ import java.util.*
 internal const val FTP_SERVER = "serwer1889938.home.pl"
 internal const val USER = "telefony@serwer1889938.home.pl"
 internal const val PASS = "Tele33Tele!"
+internal const val MAX_TRUE_TIME_SYNC_TRIES = 5
 
 class SetupPresenter(private val context: Context, private val ui: SetupUi) : BasePresenter<SetupUi>() {
+
+    private var trueTimeSyncErrorCount = 0
+    private var allDownloaded = false
+    private var schedule: Schedule? = null
 
     private fun invalidateInputs(): Boolean {
         ui.showDeviceIdError(false)
@@ -36,35 +42,39 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
         return true
     }
 
-    override fun onResume() {
-        super.onResume()
-        syncTime()
-    }
-
     private fun syncTime() {
         ui.showLoading(true)
+        ui.enableInputs(false)
         val job = GlobalScope.launch {
-            do {
-                try {
-                    TrueTime.build().initialize()
-                } catch (ignored: InvalidNtpServerResponseException) {
-                } catch (ignored: SocketTimeoutException) {
-                }
-            } while (!TrueTime.isInitialized())
+            try {
+                TrueTime.build().initialize()
+            } catch (ignored: InvalidNtpServerResponseException) {
+            } catch (ignored: SocketTimeoutException) {
+            }
         }
         job.invokeOnCompletion {
-            ui.showLoading(false)
+            if (TrueTime.isInitialized()) {
+                ui.showLoading(false)
+                ui.enableInputs(true)
+            } else if (++trueTimeSyncErrorCount < MAX_TRUE_TIME_SYNC_TRIES) {
+                syncTime()
+            } else {
+                ui.showLoading(false)
+                ui.enableInputs(false)
+                ui.showNotSyncedError()
+            }
         }
     }
 
-    private var schedule: Schedule? = null
     fun onStartClicked() {
         if (invalidateInputs() && isConnectedToNetwork(context)) {
             ui.showLoading(true)
+            ui.enableInputs(false)
             val parseScheduleJob = parseSchedule()
             parseScheduleJob.invokeOnCompletion {
                 if (schedule?.items?.isNullOrEmpty() == true) {
                     ui.showLoading(false)
+                    ui.enableInputs(true)
                     ui.showWrongScheduleError()
                 } else {
                     val videos = mutableListOf<String>()
@@ -90,10 +100,13 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                             if (allDownloaded) {
                                 ui.runVideoActivity(schedule!!)
                             } else {
+                                ui.enableInputs(true)
                                 ui.showNotAllDownloadedError()
                             }
                         }
                     } else {
+                        ui.showLoading(false)
+                        ui.enableInputs(true)
                         ui.showShowNoVideosError()
                     }
                 }
@@ -101,7 +114,6 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
         }
     }
 
-    private var allDownloaded = false
     private fun download(deviceId: String, videos: List<String>): Job {
         return GlobalScope.launch {
             var ftpClient: FTPClient? = null
@@ -121,7 +133,6 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                         val remoteFile = "${deviceId.toUpperCase()}/$it"
                         if (ftpClient.listFiles(remoteFile).isNotEmpty()) {
                             val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), it)
-                            //if (!file.exists()) {
                             outputStream = BufferedOutputStream(FileOutputStream(file))
                             inputStream = ftpClient.retrieveFileStream(remoteFile)
                             val bytesArray = ByteArray(4096)
@@ -140,7 +151,6 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                                 allDownloaded = false
                             }
                             inputStream?.close()
-                            //}
                         } else {
                             allDownloaded = false
                         }
@@ -191,5 +201,23 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = connectivityManager.activeNetworkInfo
         return activeNetwork != null && activeNetwork.isConnected
+    }
+
+    fun onPermissionsDenied() {
+        ui.showNoPermissionsError()
+    }
+
+    fun onPermissionsAccepted() {
+        if (isNetworkConnected()) {
+            syncTime()
+        } else {
+            ui.showNoNetworkError()
+        }
+    }
+
+    private fun isNetworkConnected(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork: NetworkInfo? = cm.activeNetworkInfo
+        return activeNetwork?.isConnected == true
     }
 }

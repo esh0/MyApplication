@@ -12,4 +12,6 @@ interface VideoUi : BaseUi {
     fun play()
     fun getCurrentPosition(): Long
     fun seekTo(seekTo: Long)
+    fun setBrightness(brightness: Int)
+    fun showDeviceId(deviceId: String?)
 }

@@ -8,10 +8,12 @@ import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.source.ExtractorMediaSource
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.google.android.exoplayer2.util.Util
+import com.instacart.library.truetime.InvalidNtpServerResponseException
 import com.instacart.library.truetime.TrueTime
 import com.kszalach.bigpixelvideo.framework.BasePresenter
 import com.kszalach.bigpixelvideo.model.Schedule
 import java.io.File
+import java.net.SocketTimeoutException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.schedule
@@ -19,24 +21,40 @@ import kotlin.concurrent.schedule
 class VideoPresenter(private val context: Context, private val ui: VideoUi) : BasePresenter<VideoUi>() {
 
     private var schedule: Schedule? = null
+    private var deviceId: String? = null
     private var currentVideo = 0
     private val frameRendered = AtomicBoolean(false)
     private var syncTask: TimerTask? = null
     private var updateTask: TimerTask? = null
+    private var startDelayTask: TimerTask? = null
     private var seekTime = 0L
     private var seekStart = 0L
 
     override fun onResume() {
         super.onResume()
+        ui.showDeviceId(deviceId)
         startVideo()
+        syncTime()
+    }
+
+    private fun syncTime() {
+        val delay = 1000 * (10 + Random().nextInt(180))
+        Timer().schedule(delay.toLong()) {
+            try {
+                TrueTime.build().initialize()
+            } catch (ignored: InvalidNtpServerResponseException) {
+            } catch (ignored: SocketTimeoutException) {
+            }
+        }
     }
 
     private fun startVideo() {
+        ui.setBrightness((0.8 * 255).toInt())
         val realTime = TrueTime.now().time
         val triggerTime = getVideoStart()
         val delay = triggerTime - realTime
         if (delay > 0) {
-            Timer().schedule(delay) { startVideoAndCheckOffset() }
+            startDelayTask = Timer().schedule(delay) { startVideoAndCheckOffset() }
         } else {
             startVideoAndCheckOffset()
         }
@@ -68,6 +86,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         super.onStop()
         syncTask?.cancel()
         updateTask?.cancel()
+        startDelayTask?.cancel()
         ui.stop()
     }
 
@@ -81,7 +100,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         if (startOffset > 0) {
             ui.play()
         } else {
-            Timer().schedule(-1 * startOffset) { ui.play() }
+            startDelayTask = Timer().schedule(-1 * startOffset) { ui.play() }
         }
     }
 
@@ -116,7 +135,8 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         }
     }
 
-    fun initWithSchedule(schedule: Schedule) {
+    fun init(schedule: Schedule, deviceId: String) {
         this.schedule = schedule
+        this.deviceId = deviceId
     }
 }

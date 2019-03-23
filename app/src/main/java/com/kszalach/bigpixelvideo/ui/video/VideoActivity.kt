@@ -2,6 +2,7 @@ package com.kszalach.bigpixelvideo.ui.video
 
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.TextView
 import com.google.android.exoplayer2.*
@@ -14,6 +15,7 @@ import com.kszalach.bigpixelvideo.framework.BaseActivity
 import com.kszalach.bigpixelvideo.model.Schedule
 
 const val SCHEDULE_KEY = "schedule"
+const val DEVICE_KEY = "schedule"
 
 class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListener, VideoListener {
 
@@ -37,7 +39,8 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
     private lateinit var videoView: PlayerView
     private lateinit var diffView: TextView
     private lateinit var elapsedView: TextView
-    private lateinit var videoIdText: TextView
+    private lateinit var videoIdView: TextView
+    private lateinit var deviceIdView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +53,8 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         videoView = findViewById(R.id.video_view)
         diffView = findViewById(R.id.diff)
         elapsedView = findViewById(R.id.elapsedtime)
-        videoIdText = findViewById(R.id.video_id)
+        videoIdView = findViewById(R.id.video_id)
+        deviceIdView = findViewById(R.id.device_id)
 
         videoView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
         videoView.hideController()
@@ -58,7 +62,13 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         videoView.useController = false
         videoView.player = player
 
-        presenter.initWithSchedule(intent.getSerializableExtra(SCHEDULE_KEY) as Schedule)
+        presenter.init(intent.getSerializableExtra(SCHEDULE_KEY) as Schedule, intent.getStringExtra(DEVICE_KEY))
+    }
+
+    override fun showDeviceId(deviceId: String?) {
+        runOnUiThread {
+            deviceIdView.text = deviceId
+        }
     }
 
     override fun stop() {
@@ -101,6 +111,10 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         super.setContentView(layoutResID)
     }
 
+    override fun setBrightness(brightness: Int) {
+        Settings.System.putInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS, brightness)
+    }
+
     override fun setDiffText(text: String) {
         runOnUiThread { diffView.text = text }
     }
@@ -110,7 +124,7 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
     }
 
     override fun setVideoId(text: String) {
-        runOnUiThread { videoIdText.text = text }
+        runOnUiThread { videoIdView.text = text }
     }
 
     override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {

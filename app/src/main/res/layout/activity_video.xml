@@ -37,4 +37,14 @@
         android:layout_below="@id/diff"
         android:layout_margin="6dp" />
 
+    <TextView
+        android:id="@+id/device_id"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:textColor="@color/white_light"
+        android:textSize="128sp"
+        android:textStyle="bold"
+        tools:text="A1" />
+
 </RelativeLayout>

@@ -7,4 +7,7 @@
     <string name="wrong_schedule_error">Niewłaściwy plik harmonogramu</string>
     <string name="not_all_downloaded_error">Nie pobrano wszystkich plików</string>
     <string name="no_videos_error">Brak zdefiniowanych nazw plików</string>
+    <string name="missing_permisions">Musisz udzielić wszystkich pozwoleń</string>
+    <string name="not_synced_error">Synchronizacja czasu nie powiodła się.\\nSprawdź połączenie z internetem.</string>
+    <string name="no_network_error">Brak połączenia sieciowego</string>
 </resources>
