@@ -1,6 +1,7 @@
 package com.kszalach.bigpixelvideo.ui.video
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import com.google.android.exoplayer2.Player
@@ -10,6 +11,9 @@ import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.google.android.exoplayer2.util.Util
 import com.instacart.library.truetime.InvalidNtpServerResponseException
 import com.instacart.library.truetime.TrueTime
+import com.kszalach.bigpixelvideo.domain.ISTrueTimeSyncService
+import com.kszalach.bigpixelvideo.domain.isConnectedToNetwork
+import com.kszalach.bigpixelvideo.domain.lastTrueTimesyncStatusPassed
 import com.kszalach.bigpixelvideo.framework.BasePresenter
 import com.kszalach.bigpixelvideo.model.Schedule
 import java.io.File
@@ -27,35 +31,72 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
     private var syncTask: TimerTask? = null
     private var updateTask: TimerTask? = null
     private var startDelayTask: TimerTask? = null
+    private var trueTimeSyncTask: TimerTask? = null
+    private var networkStatusTask : TimerTask? = null
     private var seekTime = 0L
     private var seekStart = 0L
 
     override fun onResume() {
         super.onResume()
-        ui.showDeviceId(deviceId)
+        initSyncTimeTask()
+        var realTime = TrueTime.now().time
+        var triggerTime = getVideoStart()
+        var delay = triggerTime - realTime
+        while (delay < 0 || currentVideo == schedule!!.items.size - 1) {
+            currentVideo++
+            realTime = TrueTime.now().time
+            triggerTime = getVideoStart()
+            delay = triggerTime - realTime
+        }
+        if (delay >= 0L && currentVideo > 0) {
+            currentVideo--
+        }
         startVideo()
-        syncTime()
     }
 
-    private fun syncTime() {
-        val delay = 1000 * (10 + Random().nextInt(180))
-        Timer().schedule(delay.toLong()) {
-            try {
-                TrueTime.build().initialize()
-            } catch (ignored: InvalidNtpServerResponseException) {
-            } catch (ignored: SocketTimeoutException) {
-            }
+    override fun onStop() {
+        super.onStop()
+        syncTask?.cancel()
+        updateTask?.cancel()
+        startDelayTask?.cancel()
+        trueTimeSyncTask?.cancel()
+        networkStatusTask?.cancel()
+        ui.stop()
+    }
+
+    private fun initSyncTimeTask() {
+        trueTimeSyncTask?.cancel()
+        val row = deviceId!![0]
+        val col = (deviceId!!.replace(row.toString(), ""))
+        val offset = 5 * (col.toInt() - 1)
+        val trueTime = TrueTime.now().time
+        val timeLeft = trueTime.rem(15 * 60 * 1000) + offset
+        if (timeLeft == 0L) {
+            context.startService(Intent(context, ISTrueTimeSyncService::class.java))
+        } else {
+            trueTimeSyncTask = Timer().schedule(timeLeft) { context.startService(Intent(context, ISTrueTimeSyncService::class.java)) }
         }
     }
 
     private fun startVideo() {
-        ui.setBrightness((0.8 * 255).toInt())
-        val realTime = TrueTime.now().time
-        val triggerTime = getVideoStart()
-        val delay = triggerTime - realTime
+        var realTime = TrueTime.now().time
+        var triggerTime = getVideoStart()
+        var delay = triggerTime - realTime
         if (delay > 0) {
             startDelayTask = Timer().schedule(delay) { startVideoAndCheckOffset() }
-        } else {
+            networkStatusTask = Timer().schedule(0, 5000) {
+                ui.setNetworkAvailable(isConnectedToNetwork(context))
+            }
+            updateTask = Timer().schedule(0, 100) {
+                val realTime = TrueTime.now().time
+                val triggerTime = getVideoStart()
+                val delay = triggerTime - realTime
+                ui.setDeviceId(deviceId)
+                ui.setTrueTime(realTime)
+                ui.setCountdown(delay)
+                ui.setTrueTimeSync(lastTrueTimesyncStatusPassed)
+            }
+        } else if (currentVideo != schedule!!.items.size - 1) {
             startVideoAndCheckOffset()
         }
     }
@@ -82,16 +123,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        syncTask?.cancel()
-        updateTask?.cancel()
-        startDelayTask?.cancel()
-        ui.stop()
-    }
-
     private fun startVideoAndCheckOffset() {
-        ui.setVideoId("Vid : $currentVideo")
         val dataSourceFactory = DefaultDataSourceFactory(context, Util.getUserAgent(context, "BigVideoPlayer"))
         val videoSource = ExtractorMediaSource.Factory(dataSourceFactory).setExtractorsFactory(DefaultExtractorsFactory())
                 .createMediaSource(Uri.fromFile(File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), schedule!!.items[currentVideo].video)))
@@ -105,6 +137,9 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
     }
 
     fun onRenderedFirstFrame() {
+        updateTask?.cancel()
+        ui.hideControls()
+
         if (frameRendered.compareAndSet(false, true)) {
             syncTask = Timer().schedule(0, 5000) {
                 val realTime = TrueTime.now().time
@@ -115,13 +150,6 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
                     seekStart = System.currentTimeMillis()
                     ui.seekTo(seekTo)
                 }
-            }
-            updateTask = Timer().schedule(0, 100) {
-                val realTime = TrueTime.now().time
-                val elapsedTime = ui.getCurrentPosition()
-                val diff = realTime - getVideoStart() - elapsedTime
-                ui.setDiffText("Diff: ${diff}ms")
-                ui.setElapsedText("Pos : ${elapsedTime}ms")
             }
         }
     }

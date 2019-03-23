@@ -7,28 +7,65 @@
     android:keepScreenOn="true"
     tools:context=".ui.setup.SetupActivity">
 
+    <android.support.v7.widget.AppCompatTextView
+        android:id="@+id/internet_indicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="@dimen/margin_default"
+        android:text="INTERNET"/>
+
     <android.support.v7.widget.AppCompatEditText
         android:id="@+id/device_id"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="@dimen/margin_default"
+        android:enabled="false"
+        android:gravity="center"
         android:hint="@string/device_id"
         android:inputType="text"
-        android:enabled="false"
+        android:textColor="@color/black_light"
+        android:textColorHint="@color/black_light"
+        android:textSize="@dimen/huge_fontsize"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/internet_indicator" />
+
+    <android.support.v7.widget.SwitchCompat
+        android:id="@+id/rewrite_files"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:text="@string/replace_files"
+        android:layout_margin="@dimen/margin_default"
+        app:switchPadding="@dimen/margin_default"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/start"
+        app:layout_constraintTop_toBottomOf="@id/device_id"/>
+
+    <android.support.v7.widget.SwitchCompat
+        android:id="@+id/quick_demo"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_margin="@dimen/margin_default"
+        android:text="@string/quick_demo"
+        app:switchPadding="@dimen/margin_default"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/start"
+        app:layout_constraintTop_toBottomOf="@id/rewrite_files"/>
 
     <android.support.v7.widget.AppCompatButton
         android:id="@+id/start"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_margin="@dimen/margin_default"
         android:enabled="false"
         android:text="@string/start"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/device_id" />
+        app:layout_constraintBottom_toBottomOf="@id/quick_demo"
+        app:layout_constraintTop_toTopOf="@id/rewrite_files" />
 
     <android.support.v4.widget.ContentLoadingProgressBar
         android:id="@+id/progress"
@@ -41,4 +78,12 @@
         app:layout_constraintBottom_toBottomOf="@id/start"
         app:layout_constraintStart_toEndOf="@id/start"
         app:layout_constraintTop_toTopOf="@id/start" />
+
+    <android.support.v7.widget.AppCompatTextView
+        android:id="@+id/progress_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/margin_default"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/quick_demo" />
 </android.support.constraint.ConstraintLayout>

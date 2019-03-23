@@ -4,43 +4,48 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.view.WindowManager
 import android.widget.TextView
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.source.ExtractorMediaSource
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.video.VideoListener
+import com.instacart.library.truetime.TrueTime
 import com.kszalach.bigpixelvideo.R
 import com.kszalach.bigpixelvideo.framework.BaseActivity
 import com.kszalach.bigpixelvideo.model.Schedule
+import kotlinx.android.synthetic.main.activity_main.*
+import java.text.SimpleDateFormat
+import java.util.concurrent.TimeUnit
 
 const val SCHEDULE_KEY = "schedule"
-const val DEVICE_KEY = "schedule"
+const val DEVICE_KEY = "device"
+const val MAX_SYNC_TIMEWINDOW = 2000
+const val DEVICES_COUNT = 264
 
 class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListener, VideoListener {
 
-    private val flags = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN) {
-        (View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
-    } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
-        (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN)
-    } else {
-        (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-    }
     private lateinit var player: SimpleExoPlayer
     private lateinit var videoView: PlayerView
-    private lateinit var diffView: TextView
-    private lateinit var elapsedView: TextView
-    private lateinit var videoIdView: TextView
+    private lateinit var trueTimeView: TextView
+    private lateinit var countdownView: TextView
     private lateinit var deviceIdView: TextView
+    private lateinit var internetIndicatorView: TextView
+    private lateinit var trueTimeIndicatorView: TextView
+    private lateinit var demoIndictorView: TextView
+    private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
+
+    override fun hideControls() {
+        runOnUiThread {
+            trueTimeView.visibility = View.GONE
+            countdownView.visibility = View.GONE
+            deviceIdView.visibility = View.GONE
+            internetIndicatorView.visibility = View.GONE
+            trueTimeIndicatorView.visibility = View.GONE
+            demoIndictorView.visibility = View.VISIBLE
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,10 +56,12 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         player.seekParameters = SeekParameters.EXACT
 
         videoView = findViewById(R.id.video_view)
-        diffView = findViewById(R.id.diff)
-        elapsedView = findViewById(R.id.elapsedtime)
-        videoIdView = findViewById(R.id.video_id)
+        trueTimeView = findViewById(R.id.true_time)
+        countdownView = findViewById(R.id.countdown)
         deviceIdView = findViewById(R.id.device_id)
+        internetIndicatorView = findViewById(R.id.internet_indicator)
+        trueTimeIndicatorView = findViewById(R.id.truetime_indicator)
+        demoIndictorView = findViewById(R.id.demo_indicator)
 
         videoView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
         videoView.hideController()
@@ -65,7 +72,20 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         presenter.init(intent.getSerializableExtra(SCHEDULE_KEY) as Schedule, intent.getStringExtra(DEVICE_KEY))
     }
 
-    override fun showDeviceId(deviceId: String?) {
+    override fun setNetworkAvailable(networkConnected: Boolean) {
+        runOnUiThread { internetIndicatorView.setBackgroundResource(if (networkConnected) R.color.green_light else R.color.red_light) }
+    }
+
+    override fun setTrueTimeSync(synced: Boolean) {
+        runOnUiThread { trueTimeIndicatorView.setBackgroundResource(if (synced) R.color.green_light else R.color.red_light) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        window.attributes.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL
+    }
+
+    override fun setDeviceId(deviceId: String?) {
         runOnUiThread {
             deviceIdView.text = deviceId
         }
@@ -106,25 +126,24 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         return R.layout.activity_video
     }
 
-    override fun setContentView(layoutResID: Int) {
-        window.decorView.systemUiVisibility = flags
-        super.setContentView(layoutResID)
+    override fun setTrueTime(time: Long?) {
+        runOnUiThread { trueTimeView.text = if (time != null) timeFormat.format(time) else null }
     }
 
-    override fun setBrightness(brightness: Int) {
-        Settings.System.putInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS, brightness)
-    }
+    override fun setCountdown(time: Long?) {
+        val timeString = if (time != null) String.format("T-%02d:%02d:%02d:%03d",
+                                                         TimeUnit.MILLISECONDS.toHours(time),
+                                                         TimeUnit.MILLISECONDS.toMinutes(time) -
+                                                                 TimeUnit.HOURS.toMinutes(TimeUnit.MILLISECONDS.toHours(time)),
+                                                         TimeUnit.MILLISECONDS.toSeconds(time) -
+                                                                 TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(time)),
+                                                         TimeUnit.MILLISECONDS.toMillis(time) -
+                                                                 TimeUnit.SECONDS.toMillis(TimeUnit.MILLISECONDS.toSeconds(time)))
+        else null
 
-    override fun setDiffText(text: String) {
-        runOnUiThread { diffView.text = text }
-    }
-
-    override fun setElapsedText(text: String) {
-        runOnUiThread { elapsedView.text = text }
-    }
-
-    override fun setVideoId(text: String) {
-        runOnUiThread { videoIdView.text = text }
+        runOnUiThread {
+            countdownView.text = timeString
+        }
     }
 
     override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
