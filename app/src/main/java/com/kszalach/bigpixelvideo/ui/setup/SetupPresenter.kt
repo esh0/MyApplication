@@ -2,14 +2,12 @@ package com.kszalach.bigpixelvideo.ui.setup
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkInfo
 import android.os.Environment
 import android.preference.PreferenceManager
 import com.google.gson.Gson
 import com.instacart.library.truetime.TrueTimeRx
 import com.kszalach.bigpixelvideo.domain.isConnectedToNetwork
-import com.kszalach.bigpixelvideo.domain.lastTrueTimesyncStatusPassed
+import com.kszalach.bigpixelvideo.domain.lastTrueTimeSyncStatusPassed
 import com.kszalach.bigpixelvideo.framework.BasePresenter
 import com.kszalach.bigpixelvideo.model.RemoteConfig
 import com.kszalach.bigpixelvideo.model.Schedule
@@ -25,7 +23,6 @@ import org.apache.commons.net.ftp.FTPClient
 import java.io.*
 import java.net.InetAddress
 import java.nio.charset.Charset
-import java.sql.Time
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
@@ -44,7 +41,7 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
     private var remoteConfig: RemoteConfig? = null
     private var videos: ArrayList<VideoItem>? = null
     private val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-    private var networkStatusTask : TimerTask? = null
+    private var updateTask: TimerTask? = null
 
     override fun onResume() {
         super.onResume()
@@ -53,20 +50,22 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             ui.setDeviceId(storedDeviceId)
         }
         remoteConfig = Gson().fromJson(prefs.getString(CONFIG_PREF_KEY, null), RemoteConfig::class.java)
-        networkStatusTask = Timer().schedule(0, 5000) {
+        updateTask = Timer().schedule(0, 100) {
+            if (TrueTimeRx.isInitialized()) {
+                ui.setTrueTime(TrueTimeRx.now().time)
+            }
+            ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
             ui.setNetworkAvailable(isConnectedToNetwork(context))
         }
     }
 
     override fun onPause() {
         super.onPause()
-        networkStatusTask?.cancel()
+        updateTask?.cancel()
     }
 
     private fun invalidateInputs(): Boolean {
-        ui.showDeviceIdError(false)
         if (ui.getDeviceId().isNullOrEmpty()) {
-            ui.showDeviceIdError(true)
             return false
         }
         return true
@@ -74,9 +73,8 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
 
     @SuppressLint("CheckResult")
     private fun syncTime() {
-        if (lastTrueTimesyncStatusPassed) {
-            ui.showLoading(false)
-            ui.enableInputs(true)
+        if (lastTrueTimeSyncStatusPassed) {
+            startParsingSchedule()
         } else {
             ui.showSyncTimeProgress()
             ui.showLoading(true)
@@ -84,34 +82,33 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             TrueTimeRx.build().initializeNtp("time.google.com")
                     .subscribeOn(Schedulers.io())
                     .subscribe({
-                                   ui.showLoading(false)
-                                   ui.enableInputs(true)
-                                   ui.hideProgress()
-                                   lastTrueTimesyncStatusPassed = true
+                                   lastTrueTimeSyncStatusPassed = true
+                                   ui.setTrueTime(TrueTimeRx.now().time)
+                                   ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
+                                   startParsingSchedule()
                                },
                                {
-                                   if (++trueTimeSyncErrorCount < MAX_TRUE_TIME_SYNC_TRIES) {
-                                       syncTime()
-                                   } else {
-                                       ui.showLoading(false)
-                                       ui.enableInputs(false)
-                                       ui.showNotSyncedError()
-                                   }
+                                   startParsingSchedule()
+                                   lastTrueTimeSyncStatusPassed = false
+                                   ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
                                })
         }
     }
 
-    fun onStartClicked() {
-        if (invalidateInputs()) {
-            val deviceId = ui.getDeviceId()!!
-            prefs.edit().putString(DEVICE_ID_PREF_KEY, deviceId).apply()
-            ui.showLoading(true)
-            ui.enableInputs(false)
-            val parseScheduleJob = parseSchedule()
-            parseScheduleJob.invokeOnCompletion {
-                onParseFinished(deviceId)
-            }
+    private fun startParsingSchedule() {
+        val deviceId = ui.getDeviceId()!!
+        prefs.edit().putString(DEVICE_ID_PREF_KEY, deviceId).apply()
+        ui.showLoading(true)
+        ui.enableInputs(false)
+        val parseScheduleJob = parseSchedule()
+        parseScheduleJob.invokeOnCompletion {
+            onParseFinished(deviceId)
         }
+    }
+
+    fun onStartClicked() {
+        ui.hideProgress()
+        ui.askForPermissions()
     }
 
     private fun onParseFinished(deviceId: String) {
@@ -119,9 +116,8 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             ui.showLoading(false)
             ui.enableInputs(true)
             ui.showWrongScheduleError()
-            ui.hideProgress()
         } else {
-            if (ui.isQuickDemoChecked()) {
+            /*if (ui.isQuickDemoChecked()) {
                 val now = Calendar.getInstance()
                 now.add(Calendar.MINUTE, 1)
                 schedule?.items?.forEach { scheduleItem: ScheduleItem ->
@@ -129,30 +125,32 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                     scheduleItem.startMinute = now.get(Calendar.MINUTE)
                     now.add(Calendar.SECOND, scheduleItem.length)
                 }
-            }
+            }*/
             if (ui.isRewriteFilesChecked() || remoteConfig == null) {
                 val downloadConfigJob = downloadConfig()
                 downloadConfigJob.invokeOnCompletion {
-                    if (remoteConfig != null) {
-                        if (remoteConfig!!.url.isNullOrEmpty() || remoteConfig!!.user.isNullOrEmpty() || remoteConfig!!.pass.isNullOrEmpty()) {
-                            ui.showShowWrongConfigError()
-                            ui.hideProgress()
-                            ui.showLoading(false)
-                            ui.enableInputs(true)
-                        } else {
-                            prefs.edit().putString(CONFIG_PREF_KEY, Gson().toJson(remoteConfig)).apply()
-                            startDownload(deviceId)
-                        }
-                    } else {
-                        ui.hideProgress()
-                        ui.showShowNoConfigError()
-                        ui.showLoading(false)
-                        ui.enableInputs(true)
-                    }
+                    onDownloadConfigCompleted(deviceId)
                 }
             } else {
                 startDownload(deviceId)
             }
+        }
+    }
+
+    private fun onDownloadConfigCompleted(deviceId: String) {
+        if (remoteConfig != null) {
+            if (remoteConfig!!.url.isNullOrEmpty() || remoteConfig!!.user.isNullOrEmpty() || remoteConfig!!.pass.isNullOrEmpty()) {
+                ui.showShowWrongConfigError()
+                ui.showLoading(false)
+                ui.enableInputs(true)
+            } else {
+                prefs.edit().putString(CONFIG_PREF_KEY, Gson().toJson(remoteConfig)).apply()
+                startDownload(deviceId)
+            }
+        } else {
+            ui.showShowNoConfigError()
+            ui.showLoading(false)
+            ui.enableInputs(true)
         }
     }
 
@@ -214,6 +212,7 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
     }
 
     private fun startDownload(deviceId: String) {
+        remoteConfig!!.deviceId = deviceId
         videos = ArrayList(0)
         schedule?.items?.forEach { scheduleItem: ScheduleItem ->
             val videoItem = VideoItem(scheduleItem.video)
@@ -224,20 +223,17 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             }
         }
         if (videos!!.isNotEmpty()) {
-            val downloadJob = download(deviceId, videos!!)
+            val downloadJob = downloadVideos(deviceId, videos!!)
             downloadJob.invokeOnCompletion {
-                onDownloadFinished(deviceId)
+                onDownloadVideosFinished()
             }
         } else {
-            ui.showLoading(false)
-            ui.enableInputs(true)
-            ui.hideProgress()
-            ui.runVideoActivity(schedule!!, deviceId)
+            ui.showStartingVideo()
+            ui.runVideoActivity(schedule!!, remoteConfig!!)
         }
     }
 
-    private fun onDownloadFinished(deviceId: String) {
-        ui.showLoading(false)
+    private fun onDownloadVideosFinished() {
         var allDownloaded = true
         videos!!.forEach {
             if (!it.downloaded) {
@@ -246,16 +242,16 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             }
         }
         if (allDownloaded) {
-            ui.runVideoActivity(schedule!!, deviceId)
+            ui.showStartingVideo()
+            ui.runVideoActivity(schedule!!, remoteConfig!!)
         } else {
-            ui.hideProgress()
             ui.showLoading(false)
             ui.enableInputs(true)
             ui.showNotAllDownloadedError(videos!!)
         }
     }
 
-    private fun download(deviceId: String, videos: List<VideoItem>): Job {
+    private fun downloadVideos(deviceId: String, videos: List<VideoItem>): Job {
         val downloadProgressTask = Timer().schedule(0, 500) {
             ui.showDownloadProgress(videos)
         }
@@ -327,7 +323,7 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
         return GlobalScope.launch {
             var json: String? = null
             try {
-                val inputStream = context.assets.open("schedule.json")
+                val inputStream = context.assets.open(if (ui.isQuickDemoChecked()) "schedule_demo.json" else "schedule.json")
                 val size = inputStream.available()
                 val buffer = ByteArray(size)
                 inputStream.read(buffer)
@@ -347,10 +343,20 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
     }
 
     fun onPermissionsAccepted() {
-        if (isConnectedToNetwork(context)) {
+        ui.silent()
+        ui.showLoading(true)
+        ui.enableInputs(false)
+        if (!isConnectedToNetwork(context)) {
+            ui.showNoNetworkError()
+        }
+
+        ui.showDeviceIdError(false)
+        if (invalidateInputs()) {
             syncTime()
         } else {
-            ui.showNoNetworkError()
+            ui.showLoading(false)
+            ui.enableInputs(true)
+            ui.showDeviceIdError(true)
         }
     }
 }

@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
-    tools:context=".ui.video.MainActivity">
+    tools:context=".ui.video.VideoActivity">
 
     <com.google.android.exoplayer2.ui.PlayerView
         android:id="@+id/video_view"
@@ -17,17 +17,13 @@
         app:layout_constraintTop_toTopOf="parent"
         app:use_controller="true" />
 
-    <android.support.v7.widget.AppCompatTextView
-        android:id="@+id/demo_indicator"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:visibility="invisible"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:text="@string/demo"
-        android:textColor="@color/white_very_light"/>
+    <View
+        android:id="@+id/manual_sync_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/blink"
+        android:visibility="gone"
+        tools:visibility="visible" />
 
     <android.support.v7.widget.AppCompatTextView
         android:id="@+id/internet_indicator"
@@ -35,7 +31,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="@dimen/margin_default"
         android:gravity="center"
-        android:text="INTERNET"
+        android:text="WIFI"
         app:layout_constraintEnd_toStartOf="@id/truetime_indicator"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -46,7 +42,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="@dimen/margin_default"
         android:gravity="center"
-        android:text="TRUETIME"
+        android:text="ZEGAR"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/internet_indicator"
         app:layout_constraintTop_toTopOf="parent" />

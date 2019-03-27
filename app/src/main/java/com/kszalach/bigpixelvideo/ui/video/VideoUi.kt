@@ -15,4 +15,5 @@ interface VideoUi : BaseUi {
     fun setNetworkAvailable(networkConnected: Boolean)
     fun setTrueTimeSync(synced: Boolean)
     fun hideControls()
+    fun notifyManualSyncTime()
 }

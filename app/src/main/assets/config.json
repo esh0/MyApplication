@@ -2,5 +2,8 @@
   "url":"serwer1889938.home.pl",
   "directory":"",
   "user":"telefony@serwer1889938.home.pl",
-  "pass":"Tele33Tele!"
+  "pass": "Tele33Tele!",
+  "syncIntervalMinutes": 30,
+  "syncDeviceCount": 2,
+  "syncGateSeconds": 19
 }

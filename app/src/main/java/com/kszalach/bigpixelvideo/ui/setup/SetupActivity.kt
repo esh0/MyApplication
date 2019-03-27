@@ -1,8 +1,10 @@
 package com.kszalach.bigpixelvideo.ui.setup
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
@@ -11,14 +13,15 @@ import android.support.v4.widget.ContentLoadingProgressBar
 import android.support.v7.widget.SwitchCompat
 import android.view.View
 import android.widget.TextView
-import android.widget.Toast
 import com.kszalach.bigpixelvideo.R
 import com.kszalach.bigpixelvideo.framework.BaseActivity
+import com.kszalach.bigpixelvideo.model.RemoteConfig
 import com.kszalach.bigpixelvideo.model.Schedule
 import com.kszalach.bigpixelvideo.model.VideoItem
-import com.kszalach.bigpixelvideo.ui.video.DEVICE_KEY
+import com.kszalach.bigpixelvideo.ui.video.CONFIG_KEY
 import com.kszalach.bigpixelvideo.ui.video.SCHEDULE_KEY
 import com.kszalach.bigpixelvideo.ui.video.VideoActivity
+import java.text.SimpleDateFormat
 
 class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
 
@@ -29,6 +32,44 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
     private lateinit var progressView: ContentLoadingProgressBar
     private lateinit var rewriteFilesView: SwitchCompat
     private lateinit var quickDemoView: SwitchCompat
+    private lateinit var trueTimeView: TextView
+    private lateinit var trueTimeIndicatorView: TextView
+    private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        deviceIdView = findViewById(R.id.device_id)
+        startView = findViewById(R.id.start)
+        progressView = findViewById(R.id.progress)
+        progressLabelView = findViewById(R.id.progress_label)
+        rewriteFilesView = findViewById(R.id.rewrite_files)
+        quickDemoView = findViewById(R.id.quick_demo)
+        internetIndicatorView = findViewById(R.id.internet_indicator)
+        trueTimeView = findViewById(R.id.true_time)
+        trueTimeIndicatorView = findViewById(R.id.truetime_indicator)
+
+        startView.setOnClickListener { presenter.onStartClicked() }
+    }
+
+    override fun askForPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_NETWORK_STATE) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CHANGE_WIFI_STATE) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.MODIFY_AUDIO_SETTINGS) != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                                                Manifest.permission.ACCESS_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE,
+                                                                Manifest.permission.MODIFY_AUDIO_SETTINGS), 1)
+            } else {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                                                Manifest.permission.ACCESS_NETWORK_STATE, Manifest.permission.CHANGE_WIFI_STATE,
+                                                                Manifest.permission.MODIFY_AUDIO_SETTINGS), 1)
+            }
+        } else {
+            presenter.onPermissionsAccepted()
+        }
+    }
 
     override fun showSyncTimeProgress() {
         runOnUiThread {
@@ -52,11 +93,15 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
     }
 
     override fun showNoNetworkError() {
-        runOnUiThread { Toast.makeText(this, getString(R.string.no_network_error), Toast.LENGTH_LONG).show() }
+        runOnUiThread { progressLabelView.text = getString(R.string.no_network_error) }
     }
 
     override fun showWrongScheduleError() {
-        runOnUiThread { Toast.makeText(this, getString(R.string.wrong_schedule_error), Toast.LENGTH_LONG).show() }
+        runOnUiThread { progressLabelView.text = getString(R.string.wrong_schedule_error) }
+    }
+
+    override fun showStartingVideo() {
+        runOnUiThread { progressLabelView.text = getString(R.string.starting_video) }
     }
 
     override fun showNotAllDownloadedError(videos: ArrayList<VideoItem>) {
@@ -73,7 +118,7 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
     }
 
     override fun showShowNoVideosError() {
-        runOnUiThread { Toast.makeText(this, getString(R.string.no_videos_error), Toast.LENGTH_LONG).show() }
+        runOnUiThread { progressLabelView.text = getString(R.string.no_videos_error) }
     }
 
     override fun showDeviceIdError(isError: Boolean) {
@@ -124,35 +169,21 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
         return R.layout.activity_setup
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        deviceIdView = findViewById(R.id.device_id)
-        startView = findViewById(R.id.start)
-        progressView = findViewById(R.id.progress)
-        progressLabelView = findViewById(R.id.progress_label)
-        rewriteFilesView = findViewById(R.id.rewrite_files)
-        quickDemoView = findViewById(R.id.quick_demo)
-        internetIndicatorView = findViewById(R.id.internet_indicator)
-
-        startView.setOnClickListener { presenter.onStartClicked() }
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_NETWORK_STATE) != PackageManager.PERMISSION_GRANTED) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                                                                Manifest.permission.ACCESS_NETWORK_STATE), 1)
-            } else {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                                                                Manifest.permission.ACCESS_NETWORK_STATE), 1)
-            }
-        } else {
-            presenter.onPermissionsAccepted()
-        }
+    override fun silent() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
     }
 
     override fun setNetworkAvailable(networkConnected: Boolean) {
         runOnUiThread { internetIndicatorView.setBackgroundResource(if (networkConnected) R.color.green_light else R.color.red_light) }
+    }
+
+    override fun setTrueTimeSync(synced: Boolean) {
+        runOnUiThread { trueTimeIndicatorView.setBackgroundResource(if (synced) R.color.green_light else R.color.red_light) }
+    }
+
+    override fun setTrueTime(time: Long?) {
+        runOnUiThread { trueTimeView.text = if (time != null) timeFormat.format(time) else null }
     }
 
     override fun onResume() {
@@ -162,7 +193,8 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED
-            || grantResults[2] != PackageManager.PERMISSION_GRANTED) {
+            || grantResults[2] != PackageManager.PERMISSION_GRANTED || grantResults[3] != PackageManager.PERMISSION_GRANTED
+            || grantResults[4] != PackageManager.PERMISSION_GRANTED) {
             presenter.onPermissionsDenied()
         } else {
             presenter.onPermissionsAccepted()
@@ -171,7 +203,7 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
 
     override fun showNoPermissionsError() {
         runOnUiThread {
-            Toast.makeText(this, getString(R.string.missing_permisions), Toast.LENGTH_LONG).show()
+            progressLabelView.text = getString(R.string.missing_permisions)
         }
     }
 
@@ -194,10 +226,10 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
         }
     }
 
-    override fun runVideoActivity(schedule: Schedule, deviceId: String) {
+    override fun runVideoActivity(schedule: Schedule, config: RemoteConfig) {
         val intent = Intent(this, VideoActivity::class.java)
         intent.putExtra(SCHEDULE_KEY, schedule)
-        intent.putExtra(DEVICE_KEY, deviceId)
+        intent.putExtra(CONFIG_KEY, config)
         startActivity(intent)
         finish()
     }

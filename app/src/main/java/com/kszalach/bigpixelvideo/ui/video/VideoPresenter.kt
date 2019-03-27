@@ -1,30 +1,31 @@
 package com.kszalach.bigpixelvideo.ui.video
 
 import android.content.Context
+import android.content.Context.WIFI_SERVICE
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Environment
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.source.ExtractorMediaSource
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.google.android.exoplayer2.util.Util
-import com.instacart.library.truetime.InvalidNtpServerResponseException
-import com.instacart.library.truetime.TrueTime
-import com.kszalach.bigpixelvideo.domain.ISTrueTimeSyncService
-import com.kszalach.bigpixelvideo.domain.isConnectedToNetwork
-import com.kszalach.bigpixelvideo.domain.lastTrueTimesyncStatusPassed
+import com.instacart.library.truetime.TrueTimeRx
+import com.kszalach.bigpixelvideo.domain.*
 import com.kszalach.bigpixelvideo.framework.BasePresenter
+import com.kszalach.bigpixelvideo.model.RemoteConfig
 import com.kszalach.bigpixelvideo.model.Schedule
 import java.io.File
-import java.net.SocketTimeoutException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.schedule
 
 class VideoPresenter(private val context: Context, private val ui: VideoUi) : BasePresenter<VideoUi>() {
 
+    private val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
     private var schedule: Schedule? = null
+    private var config: RemoteConfig? = null
     private var deviceId: String? = null
     private var currentVideo = 0
     private val frameRendered = AtomicBoolean(false)
@@ -32,19 +33,22 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
     private var updateTask: TimerTask? = null
     private var startDelayTask: TimerTask? = null
     private var trueTimeSyncTask: TimerTask? = null
-    private var networkStatusTask : TimerTask? = null
+    private var networkStatusTask: TimerTask? = null
     private var seekTime = 0L
     private var seekStart = 0L
+    private var nextSyncTimeStamp = 0L
 
     override fun onResume() {
         super.onResume()
+        wifiManager.isWifiEnabled = false
+
         initSyncTimeTask()
-        var realTime = TrueTime.now().time
+        var realTime = getTime().time
         var triggerTime = getVideoStart()
         var delay = triggerTime - realTime
         while (delay < 0 || currentVideo == schedule!!.items.size - 1) {
             currentVideo++
-            realTime = TrueTime.now().time
+            realTime = getTime().time
             triggerTime = getVideoStart()
             delay = triggerTime - realTime
         }
@@ -54,8 +58,10 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         startVideo()
     }
 
-    override fun onStop() {
-        super.onStop()
+    override fun onPause() {
+        super.onPause()
+        context.stopService(Intent(context, ISTrueTimeSyncService::class.java))
+        wifiManager.isWifiEnabled = true
         syncTask?.cancel()
         updateTask?.cancel()
         startDelayTask?.cancel()
@@ -68,18 +74,36 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         trueTimeSyncTask?.cancel()
         val row = deviceId!![0]
         val col = (deviceId!!.replace(row.toString(), ""))
-        val offset = 5 * (col.toInt() - 1)
-        val trueTime = TrueTime.now().time
-        val timeLeft = trueTime.rem(15 * 60 * 1000) + offset
+        val now = Calendar.getInstance()
+        now.time = getTime()
+        val future = Calendar.getInstance()
+        future.time = now.time
+        future.set(Calendar.SECOND, 0)
+        future.set(Calendar.MILLISECOND, 0)
+        future.set(Calendar.MINUTE, (now.get(Calendar.MINUTE) - (now.get(Calendar.MINUTE).rem(config!!.syncIntervalMinutes))).toInt())
+        val offset = config!!.syncIntervalMinutes * 60 + config!!.syncGateSeconds * ((col.toInt() - 1) / config!!.syncDeviceCount)
+        future.add(Calendar.SECOND, offset.toInt())
+
+        val timeLeft = future.timeInMillis - now.timeInMillis
         if (timeLeft == 0L) {
-            context.startService(Intent(context, ISTrueTimeSyncService::class.java))
+            syncTime()
         } else {
-            trueTimeSyncTask = Timer().schedule(timeLeft) { context.startService(Intent(context, ISTrueTimeSyncService::class.java)) }
+            nextSyncTimeStamp = future.timeInMillis
+            trueTimeSyncTask = Timer().schedule(timeLeft) {
+                syncTime()
+                initSyncTimeTask()
+            }
         }
     }
 
+    private fun syncTime() {
+        val intent = Intent(context, ISTrueTimeSyncService::class.java)
+        intent.putExtra(TURN_OFF_WIFI_KEY, true)
+        context.startService(intent)
+    }
+
     private fun startVideo() {
-        var realTime = TrueTime.now().time
+        var realTime = getTime().time
         var triggerTime = getVideoStart()
         var delay = triggerTime - realTime
         if (delay > 0) {
@@ -88,13 +112,13 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
                 ui.setNetworkAvailable(isConnectedToNetwork(context))
             }
             updateTask = Timer().schedule(0, 100) {
-                val realTime = TrueTime.now().time
+                val realTime = getTime().time
                 val triggerTime = getVideoStart()
                 val delay = triggerTime - realTime
                 ui.setDeviceId(deviceId)
                 ui.setTrueTime(realTime)
                 ui.setCountdown(delay)
-                ui.setTrueTimeSync(lastTrueTimesyncStatusPassed)
+                ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
             }
         } else if (currentVideo != schedule!!.items.size - 1) {
             startVideoAndCheckOffset()
@@ -128,7 +152,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         val videoSource = ExtractorMediaSource.Factory(dataSourceFactory).setExtractorsFactory(DefaultExtractorsFactory())
                 .createMediaSource(Uri.fromFile(File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), schedule!!.items[currentVideo].video)))
         ui.prepare(videoSource)
-        val startOffset = TrueTime.now().time - getVideoStart()
+        val startOffset = getTime().time - getVideoStart()
         if (startOffset > 0) {
             ui.play()
         } else {
@@ -142,7 +166,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
 
         if (frameRendered.compareAndSet(false, true)) {
             syncTask = Timer().schedule(0, 5000) {
-                val realTime = TrueTime.now().time
+                val realTime = getTime().time
                 val elapsedTime = ui.getCurrentPosition()
                 val diff = realTime - getVideoStart() - elapsedTime
                 if (Math.abs(diff) > 100L) {
@@ -163,8 +187,29 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         }
     }
 
-    fun init(schedule: Schedule, deviceId: String) {
+    fun init(schedule: Schedule, config: RemoteConfig) {
         this.schedule = schedule
-        this.deviceId = deviceId
+        this.deviceId = config.deviceId!!
+        if (config.syncDeviceCount == 0) {
+            config.syncDeviceCount = SYNC_DEVICES_COUNT
+        }
+        if (config.syncGateSeconds == 0L) {
+            config.syncGateSeconds = GATE_TIME_SECONDS
+        }
+        if (config.syncIntervalMinutes == 0L) {
+            config.syncIntervalMinutes = SYNC_INTERVAL_TIME_MINUTES
+        }
+        this.config = config
+    }
+
+    fun onVideoClicked() {
+        if (nextSyncTimeStamp - getTime().time > 2 * GATE_TIME_SECONDS * 1000) {
+            syncTime()
+            ui.notifyManualSyncTime()
+        }
+    }
+
+    private fun getTime(): Date {
+        return if (TrueTimeRx.isInitialized()) TrueTimeRx.now() else Calendar.getInstance().time
     }
 }

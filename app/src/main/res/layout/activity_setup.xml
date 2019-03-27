@@ -9,29 +9,49 @@
 
     <android.support.v7.widget.AppCompatTextView
         android:id="@+id/internet_indicator"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/margin_default"
+        android:gravity="center"
+        android:text="WIFI"
+        app:layout_constraintEnd_toStartOf="@id/truetime_indicator"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <android.support.v7.widget.AppCompatTextView
+        android:id="@+id/truetime_indicator"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/margin_default"
+        android:gravity="center"
+        android:text="ZEGAR"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/internet_indicator"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/true_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         android:layout_margin="@dimen/margin_default"
-        android:text="INTERNET"/>
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/truetime_indicator" />
 
     <android.support.v7.widget.AppCompatEditText
         android:id="@+id/device_id"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="@dimen/margin_default"
-        android:enabled="false"
         android:gravity="center"
         android:hint="@string/device_id"
         android:inputType="text"
-        android:textColor="@color/black_light"
+        android:textColor="@color/white_light"
         android:textColorHint="@color/black_light"
         android:textSize="@dimen/huge_fontsize"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/internet_indicator" />
+        app:layout_constraintTop_toBottomOf="@id/true_time" />
 
     <android.support.v7.widget.SwitchCompat
         android:id="@+id/rewrite_files"
@@ -40,6 +60,8 @@
         android:text="@string/replace_files"
         android:layout_margin="@dimen/margin_default"
         app:switchPadding="@dimen/margin_default"
+        android:textOff="@string/no"
+        android:textOn="@string/yes"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/start"
         app:layout_constraintTop_toBottomOf="@id/device_id"/>
@@ -51,6 +73,8 @@
         android:layout_margin="@dimen/margin_default"
         android:text="@string/quick_demo"
         app:switchPadding="@dimen/margin_default"
+        android:textOff="@string/no"
+        android:textOn="@string/yes"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/start"
         app:layout_constraintTop_toBottomOf="@id/rewrite_files"/>
@@ -60,7 +84,6 @@
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_margin="@dimen/margin_default"
-        android:enabled="false"
         android:text="@string/start"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

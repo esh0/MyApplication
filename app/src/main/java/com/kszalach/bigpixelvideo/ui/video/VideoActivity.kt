@@ -1,8 +1,6 @@
 package com.kszalach.bigpixelvideo.ui.video
 
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
@@ -11,16 +9,15 @@ import com.google.android.exoplayer2.source.ExtractorMediaSource
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.video.VideoListener
-import com.instacart.library.truetime.TrueTime
 import com.kszalach.bigpixelvideo.R
 import com.kszalach.bigpixelvideo.framework.BaseActivity
+import com.kszalach.bigpixelvideo.model.RemoteConfig
 import com.kszalach.bigpixelvideo.model.Schedule
-import kotlinx.android.synthetic.main.activity_main.*
 import java.text.SimpleDateFormat
 import java.util.concurrent.TimeUnit
 
 const val SCHEDULE_KEY = "schedule"
-const val DEVICE_KEY = "device"
+const val CONFIG_KEY = "config"
 const val MAX_SYNC_TIMEWINDOW = 2000
 const val DEVICES_COUNT = 264
 
@@ -33,7 +30,7 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
     private lateinit var deviceIdView: TextView
     private lateinit var internetIndicatorView: TextView
     private lateinit var trueTimeIndicatorView: TextView
-    private lateinit var demoIndictorView: TextView
+    private lateinit var manualSyncView: View
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
 
     override fun hideControls() {
@@ -43,7 +40,6 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
             deviceIdView.visibility = View.GONE
             internetIndicatorView.visibility = View.GONE
             trueTimeIndicatorView.visibility = View.GONE
-            demoIndictorView.visibility = View.VISIBLE
         }
     }
 
@@ -61,15 +57,22 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         deviceIdView = findViewById(R.id.device_id)
         internetIndicatorView = findViewById(R.id.internet_indicator)
         trueTimeIndicatorView = findViewById(R.id.truetime_indicator)
-        demoIndictorView = findViewById(R.id.demo_indicator)
+        manualSyncView = findViewById(R.id.manual_sync_view)
 
         videoView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
         videoView.hideController()
         videoView.controllerAutoShow = false
         videoView.useController = false
         videoView.player = player
+        videoView.setOnClickListener { presenter.onVideoClicked() }
+        presenter.init(intent.getSerializableExtra(SCHEDULE_KEY) as Schedule, intent.getSerializableExtra(CONFIG_KEY) as RemoteConfig)
+    }
 
-        presenter.init(intent.getSerializableExtra(SCHEDULE_KEY) as Schedule, intent.getStringExtra(DEVICE_KEY))
+    override fun notifyManualSyncTime() {
+        runOnUiThread {
+            manualSyncView.visibility = View.VISIBLE
+            manualSyncView.postDelayed({ manualSyncView.visibility = View.GONE }, 75)
+        }
     }
 
     override fun setNetworkAvailable(networkConnected: Boolean) {
