@@ -28,7 +28,10 @@ interface SetupUi : BaseUi {
     fun setNetworkAvailable(networkConnected: Boolean)
     fun setTrueTimeSync(synced: Boolean)
     fun silent()
+    fun canSilent(): Boolean
     fun setTrueTime(time: Long?)
     fun showStartingVideo()
     fun askForPermissions()
+    fun askSilent()
+    fun showParsingSchedule()
 }

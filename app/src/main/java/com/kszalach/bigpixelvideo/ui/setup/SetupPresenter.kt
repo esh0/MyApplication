@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Environment
 import android.preference.PreferenceManager
+import com.crashlytics.android.Crashlytics
 import com.google.gson.Gson
 import com.instacart.library.truetime.TrueTimeRx
 import com.kszalach.bigpixelvideo.domain.isConnectedToNetwork
@@ -30,13 +31,11 @@ import kotlin.concurrent.schedule
 internal const val FTP_SERVER = "serwer1889938.home.pl"
 internal const val USER = "telefony@serwer1889938.home.pl"
 internal const val PASS = "Tele33Tele!"
-internal const val MAX_TRUE_TIME_SYNC_TRIES = 5
 const val DEVICE_ID_PREF_KEY = "device_id_key"
 const val CONFIG_PREF_KEY = "config_key"
 
 class SetupPresenter(private val context: Context, private val ui: SetupUi) : BasePresenter<SetupUi>() {
 
-    private var trueTimeSyncErrorCount = 0
     private var schedule: Schedule? = null
     private var remoteConfig: RemoteConfig? = null
     private var videos: ArrayList<VideoItem>? = null
@@ -65,7 +64,7 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
     }
 
     private fun invalidateInputs(): Boolean {
-        if (ui.getDeviceId().isNullOrEmpty()) {
+        if (ui.getDeviceId().isNullOrBlank()) {
             return false
         }
         return true
@@ -88,14 +87,15 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                                    startParsingSchedule()
                                },
                                {
-                                   startParsingSchedule()
                                    lastTrueTimeSyncStatusPassed = false
                                    ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
+                                   startParsingSchedule()
                                })
         }
     }
 
     private fun startParsingSchedule() {
+        ui.showParsingSchedule()
         val deviceId = ui.getDeviceId()!!
         prefs.edit().putString(DEVICE_ID_PREF_KEY, deviceId).apply()
         ui.showLoading(true)
@@ -117,15 +117,6 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             ui.enableInputs(true)
             ui.showWrongScheduleError()
         } else {
-            /*if (ui.isQuickDemoChecked()) {
-                val now = Calendar.getInstance()
-                now.add(Calendar.MINUTE, 1)
-                schedule?.items?.forEach { scheduleItem: ScheduleItem ->
-                    scheduleItem.startHour = now.get(Calendar.HOUR_OF_DAY)
-                    scheduleItem.startMinute = now.get(Calendar.MINUTE)
-                    now.add(Calendar.SECOND, scheduleItem.length)
-                }
-            }*/
             if (ui.isRewriteFilesChecked() || remoteConfig == null) {
                 val downloadConfigJob = downloadConfig()
                 downloadConfigJob.invokeOnCompletion {
@@ -189,23 +180,23 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                         inputStream?.close()
                     }
                 } catch (e: java.lang.Exception) {
-                    e.printStackTrace()
+                    Crashlytics.logException(e)
                 } finally {
                     outputStream?.close()
                     inputStream?.close()
                 }
             } catch (e: java.lang.Exception) {
-                e.printStackTrace()
+                Crashlytics.logException(e)
             } finally {
                 try {
                     ftpClient?.logout()
                 } catch (e: IOException) {
-
+                    Crashlytics.logException(e)
                 }
                 try {
                     ftpClient?.disconnect()
                 } catch (e: IOException) {
-
+                    Crashlytics.logException(e)
                 }
             }
         }
@@ -213,12 +204,14 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
 
     private fun startDownload(deviceId: String) {
         remoteConfig!!.deviceId = deviceId
-        videos = ArrayList(0)
+        videos = ArrayList()
         schedule?.items?.forEach { scheduleItem: ScheduleItem ->
             val videoItem = VideoItem(scheduleItem.video)
-            if (!videos!!.contains(videoItem)) {
-                if (ui.isRewriteFilesChecked() || !File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), scheduleItem.video).exists()) {
-                    videos!!.add(videoItem)
+            synchronized(this) {
+                if (!videos!!.contains(videoItem)) {
+                    if (ui.isRewriteFilesChecked() || !File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), scheduleItem.video).exists()) {
+                        videos!!.add(videoItem)
+                    }
                 }
             }
         }
@@ -295,25 +288,25 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                             it.downloaded = false
                         }
                     } catch (e: java.lang.Exception) {
-                        e.printStackTrace()
+                        Crashlytics.logException(e)
                     } finally {
                         outputStream?.close()
                         inputStream?.close()
                     }
                 }
             } catch (e: java.lang.Exception) {
-                e.printStackTrace()
+                Crashlytics.logException(e)
             } finally {
                 downloadProgressTask.cancel()
                 try {
                     ftpClient?.logout()
                 } catch (e: IOException) {
-
+                    Crashlytics.logException(e)
                 }
                 try {
                     ftpClient?.disconnect()
                 } catch (e: IOException) {
-
+                    Crashlytics.logException(e)
                 }
             }
         }
@@ -329,8 +322,8 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                 inputStream.read(buffer)
                 inputStream.close()
                 json = String(buffer, Charset.defaultCharset())
-            } catch (ex: IOException) {
-                ex.printStackTrace()
+            } catch (e: IOException) {
+                Crashlytics.logException(e)
             }
             if (!json.isNullOrEmpty()) {
                 schedule = Gson().fromJson(json, Schedule::class.java)
@@ -343,7 +336,15 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
     }
 
     fun onPermissionsAccepted() {
-        ui.silent()
+        if (ui.canSilent()) {
+            ui.silent()
+            start()
+        } else {
+            ui.askSilent()
+        }
+    }
+
+    private fun start() {
         ui.showLoading(true)
         ui.enableInputs(false)
         if (!isConnectedToNetwork(context)) {
@@ -357,6 +358,15 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
             ui.showLoading(false)
             ui.enableInputs(true)
             ui.showDeviceIdError(true)
+        }
+    }
+
+    fun onCanSilent(canSilent: Boolean) {
+        if (canSilent) {
+            ui.silent()
+            start()
+        } else {
+            ui.showNoPermissionsError()
         }
     }
 }

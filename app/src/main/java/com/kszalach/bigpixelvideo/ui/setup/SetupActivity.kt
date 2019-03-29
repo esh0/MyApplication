@@ -1,18 +1,22 @@
 package com.kszalach.bigpixelvideo.ui.setup
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.support.annotation.RequiresApi
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v4.widget.ContentLoadingProgressBar
 import android.support.v7.widget.SwitchCompat
 import android.view.View
 import android.widget.TextView
+import com.crashlytics.android.Crashlytics
+import com.kszalach.bigpixelvideo.BuildConfig
 import com.kszalach.bigpixelvideo.R
 import com.kszalach.bigpixelvideo.framework.BaseActivity
 import com.kszalach.bigpixelvideo.model.RemoteConfig
@@ -49,6 +53,8 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
         trueTimeIndicatorView = findViewById(R.id.truetime_indicator)
 
         startView.setOnClickListener { presenter.onStartClicked() }
+
+        findViewById<TextView>(R.id.version).text = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
     }
 
     override fun askForPermissions() {
@@ -170,8 +176,12 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
     }
 
     override fun silent() {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+        } catch (e: SecurityException) {
+            Crashlytics.logException(e)
+        }
     }
 
     override fun setNetworkAvailable(networkConnected: Boolean) {
@@ -192,12 +202,12 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (grantResults[0] != PackageManager.PERMISSION_GRANTED || grantResults[1] != PackageManager.PERMISSION_GRANTED
-            || grantResults[2] != PackageManager.PERMISSION_GRANTED || grantResults[3] != PackageManager.PERMISSION_GRANTED
-            || grantResults[4] != PackageManager.PERMISSION_GRANTED) {
-            presenter.onPermissionsDenied()
-        } else {
+        var allAccepted = true
+        grantResults.forEach { allAccepted = allAccepted && it == PackageManager.PERMISSION_GRANTED }
+        if (allAccepted) {
             presenter.onPermissionsAccepted()
+        } else {
+            presenter.onPermissionsDenied()
         }
     }
 
@@ -232,5 +242,36 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
         intent.putExtra(CONFIG_KEY, config)
         startActivity(intent)
         finish()
+    }
+
+    override fun canSilent(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true
+        }
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (notificationManager.isNotificationPolicyAccessGranted) {
+            return true
+        }
+        return false
+    }
+
+    override fun showParsingSchedule() {
+        runOnUiThread {
+            progressLabelView.text = getString(R.string.parsing_schedule)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    override fun askSilent() {
+        val intent = Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+        startActivityForResult(intent, 2)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            presenter.onCanSilent(notificationManager.isNotificationPolicyAccessGranted)
+        }
     }
 }

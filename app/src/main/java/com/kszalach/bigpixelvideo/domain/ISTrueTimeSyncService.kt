@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.net.NetworkInfo
 import android.net.wifi.WifiManager
 import android.os.IBinder
+import com.crashlytics.android.Crashlytics
 import com.instacart.library.truetime.TrueTimeRx
 import io.reactivex.Single
 import io.reactivex.disposables.Disposable
@@ -112,5 +113,13 @@ class ISTrueTimeSyncService : Service() {
                                lastTrueTimeSyncStatusPassed = false
                                log("ISTrueTimeSyncService sync time failed")
                            })
+    }
+
+    override fun unregisterReceiver(receiver: BroadcastReceiver?) {
+        try {
+            super.unregisterReceiver(receiver)
+        } catch (e: IllegalArgumentException) {
+            Crashlytics.logException(e)
+        }
     }
 }
