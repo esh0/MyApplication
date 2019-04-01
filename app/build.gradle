@@ -7,9 +7,9 @@ android {
     compileSdkVersion 28
     defaultConfig {
         applicationId "com.kszalach.bigpixelvideo"
-        minSdkVersion 19
+        minSdkVersion 14
         targetSdkVersion 28
-        versionCode 5
+        versionCode 10
         versionName "1.0-beta"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         multiDexEnabled true
@@ -43,6 +43,11 @@ dependencies {
     implementation 'com.squareup.retrofit2:converter-gson:2.1.0'
     implementation 'commons-net:commons-net:3.6'
     implementation 'com.android.support:multidex:1.0.3'
+
+    testImplementation 'org.powermock:powermock-module-junit4:2.0.0-RC.4'
+    testImplementation 'org.powermock:powermock-module-junit4-rule:1.7.4'
+    testImplementation 'org.powermock:powermock-api-mockito2:2.0.0-beta.5'
+    testImplementation 'org.powermock:powermock-classloading-xstream:1.7.4'
 }
 repositories {
     mavenCentral()

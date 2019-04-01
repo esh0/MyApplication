@@ -5,12 +5,14 @@ import android.content.Context.WIFI_SERVICE
 import android.content.Intent
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.os.Bundle
 import android.os.Environment
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.source.ExtractorMediaSource
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.google.android.exoplayer2.util.Util
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.instacart.library.truetime.TrueTimeRx
 import com.kszalach.bigpixelvideo.domain.*
 import com.kszalach.bigpixelvideo.framework.BasePresenter
@@ -23,7 +25,8 @@ import kotlin.concurrent.schedule
 
 class VideoPresenter(private val context: Context, private val ui: VideoUi) : BasePresenter<VideoUi>() {
 
-    private val wifiManager = context.applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+    private val wifiManager = context.applicationContext?.getSystemService(WIFI_SERVICE) as WifiManager?
+    private val firebaseAnalytics = FirebaseAnalytics.getInstance(context)
     private var schedule: Schedule? = null
     private var config: RemoteConfig? = null
     private var deviceId: String? = null
@@ -40,13 +43,17 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
 
     override fun onResume() {
         super.onResume()
-        wifiManager.isWifiEnabled = false
-
+        wifiManager?.isWifiEnabled = false
         initSyncTimeTask()
+        getStartVideoPosition()
+        startVideo()
+    }
+
+    private fun getStartVideoPosition() {
         var realTime = getTime().time
         var triggerTime = getVideoStart()
         var delay = triggerTime - realTime
-        while (delay < 0 || currentVideo == schedule!!.items.size - 1) {
+        while (delay < 0 && currentVideo < schedule!!.items.size - 1) {
             currentVideo++
             realTime = getTime().time
             triggerTime = getVideoStart()
@@ -55,13 +62,18 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         if (delay >= 0L && currentVideo > 0) {
             currentVideo--
         }
-        startVideo()
+
+        val bundle = Bundle()
+        bundle.putString("currentVideo", currentVideo.toString())
+        bundle.putString("trueTime", if (TrueTimeRx.isInitialized()) TrueTimeRx.now().time.toString() else "")
+        bundle.putString("systemTime", System.currentTimeMillis().toString())
+        firebaseAnalytics.logEvent("onResume", bundle)
     }
 
     override fun onPause() {
         super.onPause()
         context.stopService(Intent(context, ISTrueTimeSyncService::class.java))
-        wifiManager.isWifiEnabled = true
+        wifiManager?.isWifiEnabled = true
         syncTask?.cancel()
         updateTask?.cancel()
         startDelayTask?.cancel()
@@ -74,9 +86,9 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         trueTimeSyncTask?.cancel()
         val row = deviceId!![0]
         val col = (deviceId!!.replace(row.toString(), ""))
-        val now = Calendar.getInstance()
+        val now = getCalendar()
         now.time = getTime()
-        val future = Calendar.getInstance()
+        val future = getCalendar()
         future.time = now.time
         future.set(Calendar.SECOND, 0)
         future.set(Calendar.MILLISECOND, 0)
@@ -99,6 +111,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
     private fun syncTime() {
         val intent = Intent(context, ISTrueTimeSyncService::class.java)
         intent.putExtra(TURN_OFF_WIFI_KEY, true)
+        intent.putExtra(NTP_SERVER_KEY, config!!.ntpServer)
         context.startService(intent)
     }
 
@@ -126,12 +139,7 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
     }
 
     private fun getVideoStart(): Long {
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.HOUR_OF_DAY, schedule!!.items[currentVideo].startHour)
-        calendar.set(Calendar.MINUTE, schedule!!.items[currentVideo].startMinute)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
+        return schedule!!.items[currentVideo].startTime!!.timeInMillis
     }
 
     fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
@@ -153,6 +161,14 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
                 .createMediaSource(Uri.fromFile(File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), schedule!!.items[currentVideo].video)))
         ui.prepare(videoSource)
         val startOffset = getTime().time - getVideoStart()
+
+        val bundle = Bundle()
+        bundle.putString("currentVideo", currentVideo.toString())
+        bundle.putString("startOffset", startOffset.toString())
+        bundle.putString("trueTime", if (TrueTimeRx.isInitialized()) TrueTimeRx.now().time.toString() else "")
+        bundle.putString("systemTime", System.currentTimeMillis().toString())
+        firebaseAnalytics.logEvent("startVideoAndCheckOffset", bundle)
+
         if (startOffset > 0) {
             ui.play()
         } else {
@@ -165,17 +181,47 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
         ui.hideControls()
 
         if (frameRendered.compareAndSet(false, true)) {
-            syncTask = Timer().schedule(0, 5000) {
-                val realTime = getTime().time
-                val elapsedTime = ui.getCurrentPosition()
-                val diff = realTime - getVideoStart() - elapsedTime
-                if (Math.abs(diff) > 100L) {
-                    val seekTo = if (diff > 0) elapsedTime + diff + seekTime else elapsedTime - diff + seekTime
+            ui.showCurrentVideo(currentVideo)
+
+            val bundle = Bundle()
+            bundle.putString("currentVideo", currentVideo.toString())
+            bundle.putString("trueTime", if (TrueTimeRx.isInitialized()) TrueTimeRx.now().time.toString() else "")
+            bundle.putString("systemTime", System.currentTimeMillis().toString())
+            firebaseAnalytics.logEvent("onRenderedFirstFrame", bundle)
+
+            var delay = 0L
+            if (TrueTimeRx.isInitialized()) {
+                delay = 2 * Math.abs(TrueTimeRx.now().time - System.currentTimeMillis())
+            }
+            syncTask = Timer().schedule(delay, 5000) {
+                val seekTo = getSeekTo(ui.getCurrentLength())
+                if (seekTo != 0L) {
                     seekStart = System.currentTimeMillis()
                     ui.seekTo(seekTo)
                 }
             }
         }
+    }
+
+    private fun getSeekTo(duration: Long): Long {
+        var seekTo = 0L
+        val realTime = getTime().time
+        val elapsedTime = ui.getCurrentPosition()
+        val videoStart = getVideoStart()
+        val diff = realTime - videoStart - elapsedTime
+        if (Math.abs(diff) > 100L) {
+            seekTo = if (diff > 0) elapsedTime + diff + seekTime else elapsedTime - diff + seekTime
+            if (seekTo >= duration) {
+                val bundle = Bundle()
+                bundle.putString("seekTo", seekTo.toString())
+                bundle.putString("currentVideo", currentVideo.toString())
+                bundle.putString("trueTime", if (TrueTimeRx.isInitialized()) TrueTimeRx.now().time.toString() else "")
+                bundle.putString("systemTime", System.currentTimeMillis().toString())
+                firebaseAnalytics.logEvent("getSeekTo", bundle)
+                seekTo = 0
+            }
+        }
+        return seekTo
     }
 
     fun onSeekProcessed() {
@@ -210,6 +256,8 @@ class VideoPresenter(private val context: Context, private val ui: VideoUi) : Ba
     }
 
     private fun getTime(): Date {
-        return if (TrueTimeRx.isInitialized()) TrueTimeRx.now() else Calendar.getInstance().time
+        return if (TrueTimeRx.isInitialized()) TrueTimeRx.now() else getCalendar().time
     }
+
+    private fun getCalendar() = Calendar.getInstance()
 }

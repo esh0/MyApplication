@@ -7,6 +7,7 @@ import android.preference.PreferenceManager
 import com.crashlytics.android.Crashlytics
 import com.google.gson.Gson
 import com.instacart.library.truetime.TrueTimeRx
+import com.kszalach.bigpixelvideo.domain.DEFAULT_NTP_SERVER
 import com.kszalach.bigpixelvideo.domain.isConnectedToNetwork
 import com.kszalach.bigpixelvideo.domain.lastTrueTimeSyncStatusPassed
 import com.kszalach.bigpixelvideo.framework.BasePresenter
@@ -71,25 +72,28 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
     }
 
     @SuppressLint("CheckResult")
-    private fun syncTime() {
+    private fun syncTime(deviceId: String) {
         if (lastTrueTimeSyncStatusPassed) {
             startParsingSchedule()
         } else {
             ui.showSyncTimeProgress()
             ui.showLoading(true)
             ui.enableInputs(false)
-            TrueTimeRx.build().initializeNtp("time.google.com")
+            TrueTimeRx.build().initializeNtp(remoteConfig!!.ntpServer)
                     .subscribeOn(Schedulers.io())
                     .subscribe({
                                    lastTrueTimeSyncStatusPassed = true
                                    ui.setTrueTime(TrueTimeRx.now().time)
                                    ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
-                                   startParsingSchedule()
+                                   startDownload(deviceId)
                                },
                                {
                                    lastTrueTimeSyncStatusPassed = false
                                    ui.setTrueTimeSync(lastTrueTimeSyncStatusPassed)
-                                   startParsingSchedule()
+                                   ui.setSyncError(it, remoteConfig!!)
+                                   ui.enableInputs(true)
+                                   ui.showLoading(false)
+                                   //startDownload(deviceId)
                                })
         }
     }
@@ -111,6 +115,54 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
         ui.askForPermissions()
     }
 
+    private fun parseSchedule(): Job {
+        return GlobalScope.launch {
+            var json: String? = null
+            try {
+                val inputStream = context.assets.open(if (ui.isQuickDemoChecked()) "schedule_demo.json" else "schedule.json")
+                val size = inputStream.available()
+                val buffer = ByteArray(size)
+                inputStream.read(buffer)
+                inputStream.close()
+                json = String(buffer, Charset.defaultCharset())
+            } catch (e: IOException) {
+                Crashlytics.logException(e)
+            }
+            if (!json.isNullOrEmpty()) {
+                schedule = Gson().fromJson(json, Schedule::class.java)
+
+                val calendar = Calendar.getInstance()
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                if (calendar.get(Calendar.HOUR_OF_DAY) in 0..2) {
+                    calendar.add(Calendar.DAY_OF_WEEK, -1)
+                }
+
+                var timeChange = false
+                var previousHour = -1
+                schedule?.items?.forEach { scheduleItem: ScheduleItem ->
+                    val calendarLocal = Calendar.getInstance()
+                    calendarLocal.timeInMillis = calendar.timeInMillis
+                    if (previousHour != -1 && previousHour > scheduleItem.startHour) {
+                        timeChange = true
+                    }
+                    previousHour = scheduleItem.startHour
+                    if (timeChange) {
+                        timeChange = false
+                        calendarLocal.add(Calendar.DAY_OF_WEEK, 1)
+                    }
+
+                    calendarLocal.set(Calendar.HOUR_OF_DAY, scheduleItem.startHour)
+                    calendarLocal.set(Calendar.MINUTE, scheduleItem.startMinute)
+
+                    scheduleItem.startTime = calendarLocal
+
+                    calendar.timeInMillis = calendarLocal.timeInMillis
+                }
+            }
+        }
+    }
+
     private fun onParseFinished(deviceId: String) {
         if (schedule?.items?.isNullOrEmpty() == true) {
             ui.showLoading(false)
@@ -123,7 +175,7 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                     onDownloadConfigCompleted(deviceId)
                 }
             } else {
-                startDownload(deviceId)
+                syncTime(deviceId)
             }
         }
     }
@@ -135,8 +187,11 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
                 ui.showLoading(false)
                 ui.enableInputs(true)
             } else {
+                if (remoteConfig!!.ntpServer.isNullOrBlank()) {
+                    remoteConfig!!.ntpServer = DEFAULT_NTP_SERVER
+                }
                 prefs.edit().putString(CONFIG_PREF_KEY, Gson().toJson(remoteConfig)).apply()
-                startDownload(deviceId)
+                syncTime(deviceId)
             }
         } else {
             ui.showShowNoConfigError()
@@ -312,25 +367,6 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
         }
     }
 
-    private fun parseSchedule(): Job {
-        return GlobalScope.launch {
-            var json: String? = null
-            try {
-                val inputStream = context.assets.open(if (ui.isQuickDemoChecked()) "schedule_demo.json" else "schedule.json")
-                val size = inputStream.available()
-                val buffer = ByteArray(size)
-                inputStream.read(buffer)
-                inputStream.close()
-                json = String(buffer, Charset.defaultCharset())
-            } catch (e: IOException) {
-                Crashlytics.logException(e)
-            }
-            if (!json.isNullOrEmpty()) {
-                schedule = Gson().fromJson(json, Schedule::class.java)
-            }
-        }
-    }
-
     fun onPermissionsDenied() {
         ui.showNoPermissionsError()
     }
@@ -353,7 +389,7 @@ class SetupPresenter(private val context: Context, private val ui: SetupUi) : Ba
 
         ui.showDeviceIdError(false)
         if (invalidateInputs()) {
-            syncTime()
+            startParsingSchedule()
         } else {
             ui.showLoading(false)
             ui.enableInputs(true)

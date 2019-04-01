@@ -40,6 +40,10 @@ class SetupActivity : BaseActivity<SetupPresenter>(), SetupUi {
     private lateinit var trueTimeIndicatorView: TextView
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
 
+    override fun setSyncError(it: Throwable?, remoteConfig: RemoteConfig) {
+        it?.let { runOnUiThread { progressLabelView.text = remoteConfig.ntpServer + "\n" + it.localizedMessage } }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         deviceIdView = findViewById(R.id.device_id)

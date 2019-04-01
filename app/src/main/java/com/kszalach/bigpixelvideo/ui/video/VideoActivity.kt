@@ -37,7 +37,9 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         runOnUiThread {
             trueTimeView.visibility = View.GONE
             countdownView.visibility = View.GONE
-            deviceIdView.visibility = View.GONE
+            if (!com.kszalach.bigpixelvideo.BuildConfig.DEBUG) {
+                deviceIdView.visibility = View.GONE
+            }
             internetIndicatorView.visibility = View.GONE
             trueTimeIndicatorView.visibility = View.GONE
         }
@@ -66,6 +68,16 @@ class VideoActivity : BaseActivity<VideoPresenter>(), VideoUi, Player.EventListe
         videoView.player = player
         videoView.setOnClickListener { presenter.onVideoClicked() }
         presenter.init(intent.getSerializableExtra(SCHEDULE_KEY) as Schedule, intent.getSerializableExtra(CONFIG_KEY) as RemoteConfig)
+    }
+
+    override fun getCurrentLength(): Long {
+        return player.duration
+    }
+
+    override fun showCurrentVideo(currentVideo: Int) {
+        if (com.kszalach.bigpixelvideo.BuildConfig.DEBUG) {
+            runOnUiThread { deviceIdView.text = currentVideo.toString() }
+        }
     }
 
     override fun notifyManualSyncTime() {

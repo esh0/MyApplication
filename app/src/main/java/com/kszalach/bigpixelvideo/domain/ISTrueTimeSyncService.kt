@@ -20,9 +20,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.schedule
 
 const val TURN_OFF_WIFI_KEY = "turn_off_wifi"
+const val NTP_SERVER_KEY = "ntp_server_key"
 const val GATE_TIME_SECONDS = 19L
 const val SYNC_INTERVAL_TIME_MINUTES = 30L
 const val SYNC_DEVICES_COUNT = 2
+const val DEFAULT_NTP_SERVER = "time.google.com"
 var lastTrueTimeSyncStatusPassed = false
 var trueTimeSyncCurrentlyRunning = false
 class ISTrueTimeSyncService : Service() {
@@ -35,6 +37,7 @@ class ISTrueTimeSyncService : Service() {
     private var networkStateReceiver: BroadcastReceiver? = null
     private var syncTimeSubscription: Disposable? = null
     private var turnOffWiFi = false
+    private var ntpServer: String? = null
     private var cancelTimer: TimerTask? = null
 
     fun log(text: String) {
@@ -53,6 +56,10 @@ class ISTrueTimeSyncService : Service() {
         trueTimeSyncCurrentlyRunning = true
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         turnOffWiFi = intent?.getBooleanExtra(TURN_OFF_WIFI_KEY, false) == true
+        ntpServer = intent?.getStringExtra(NTP_SERVER_KEY)
+        if (ntpServer.isNullOrBlank()) {
+            ntpServer = DEFAULT_NTP_SERVER
+        }
         cancelTimer = Timer().schedule(GATE_TIME_SECONDS * 1000) {
             log("ISTrueTimeSyncService timer elapsed")
             if (networkStateReceiver != null) {
@@ -91,7 +98,7 @@ class ISTrueTimeSyncService : Service() {
                 }
                 .delay(3, TimeUnit.SECONDS)
                 .flatMap<LongArray> {
-                    TrueTimeRx.build().initializeNtp("time.google.com")
+                    TrueTimeRx.build().initializeNtp(ntpServer)
                 }
                 .doFinally {
                     cancelTimer?.cancel()

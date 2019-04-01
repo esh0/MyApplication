@@ -34,4 +34,5 @@ interface SetupUi : BaseUi {
     fun askForPermissions()
     fun askSilent()
     fun showParsingSchedule()
+    fun setSyncError(it: Throwable?, remoteConfig: RemoteConfig)
 }

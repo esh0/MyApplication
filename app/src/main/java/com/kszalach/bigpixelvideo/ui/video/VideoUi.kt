@@ -16,4 +16,6 @@ interface VideoUi : BaseUi {
     fun setTrueTimeSync(synced: Boolean)
     fun hideControls()
     fun notifyManualSyncTime()
+    fun getCurrentLength(): Long
+    fun showCurrentVideo(currentVideo: Int)
 }
